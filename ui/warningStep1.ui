@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>Dialog</class>
+ <widget class="QDialog" name="Dialog">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>358</width>
+    <height>190</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>Dialog</string>
+  </property>
+  <widget class="QPushButton" name="pushButton">
+   <property name="geometry">
+    <rect>
+     <x>140</x>
+     <y>140</y>
+     <width>87</width>
+     <height>29</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>PushButton</string>
+   </property>
+  </widget>
+  <widget class="QLabel" name="label">
+   <property name="geometry">
+    <rect>
+     <x>100</x>
+     <y>40</y>
+     <width>181</width>
+     <height>61</height>
+    </rect>
+   </property>
+   <property name="text">
+    <string>       Please select an iso file</string>
+   </property>
+  </widget>
+ </widget>
+ <resources/>
+ <connections>
+  <connection>
+   <sender>pushButton</sender>
+   <signal>clicked()</signal>
+   <receiver>Dialog</receiver>
+   <slot>close()</slot>
+   <hints>
+    <hint type="sourcelabel">
+     <x>187</x>
+     <y>152</y>
+    </hint>
+    <hint type="destinationlabel">
+     <x>297</x>
+     <y>153</y>
+    </hint>
+   </hints>
+  </connection>
+ </connections>
+</ui>
