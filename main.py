@@ -66,9 +66,9 @@ class main(QMainWindow):
         management = DeviceManage(name)
         management.do_umount()
         management.do_format()
-        #management.do_mount()
+        management.do_mount()
         stateProcess =  ExtractProcessControl(self.ui, self.targetIso)
-        stateProcess.extractall(self.targetDevice)
+        stateProcess.extractall(self.targetDevice + r"/")
 
 
     def selectTheISO(self):

@@ -1,32 +1,4 @@
 import dbus
-from zipfile import ZipFile
-import os
-
-class ExtractProcessControl(ZipFile):
-	def __init__(self, widget, *args):
-		super().__init__(*args)
-		self.widget = widget
-		self.processBar = self.widget.progressBar
-		self.totalVolume = 0
-		self.work = 0
-		for i in self.infolist():
-			self.totalVolume += i.file_size
-		
-		self.processBar.setMaximum(self.totalVolume)
-		self.processBar.setMinimum(0)
-		
-
-	def extract(self, member, path, *args):
-		#print(path)
-		super().extract(member, path, *args)
-		self.work += self.getinfo(member).file_size
-		self.processBar.setValue(self.work)
-
-	def extractall(self, path, *args):
-		#print(path)
-		#os.chmod(path, 436)
-		super().extractall(path , *args)
-		#os.fchmod(path, "r")
 
 class DeviceManage:
 	"""device control"""
@@ -55,20 +27,15 @@ class DeviceManage:
 		return partSystem
 
 	def do_umount(self):
-		print(self.name, self.system[self.name])
-		objSystem = self.busSystem.get_object("org.freedesktop.UDisks2", self.system[self.name])
+		objSystem = self.busSystem.get_object(self.system[self.name])
 		iface = dbus.Interface(objSystem, "org.freedesktop.UDisks2.Filesystem")
 		iface.Unmount({})
-		iface.SetLabel(self.name, {})
 
 	def do_mount(self):
-		objSystem = self.busSystem.get_object("org.freedesktop.UDisks2", self.system[self.name])
-		iface = dbus.Interface(objSystem, "org.freedesktop.UDisks2.Filesystem")
-		iface.Mount({})
-		#iface.SetLabel(self.name, {})
+		objSystem = self.busSystem.get_object("org.freedesktop.UDisks2")
 
 	def do_format(self):
-		objSystem = self.busSystem.get_object("org.freedesktop.UDisks2", self.system[self.name])
+		objSystem = self.busSystem.get_object(self.system[self.name])
 		iface = dbus.Interface(objSystem, "org.freedesktop.UDisks2.Block")
 		iface.Format('vfat', {})
 		iface = dbus.Interface(objSystem, "org.freedesktop.UDisks2.Filesystem")
