@@ -3,8 +3,13 @@ gi.require_version("Gtk", '3.0')
 gi.require_version("UDisks", "2.0")
 from gi.repository import Gtk, UDisks
 import dbus
+
 from usbDetect import getAllUnixDevices
 from raw_format import format
+from raw_write import writeProcess
+from notifications import *
+
+from queue import Queue
 from functools import partial
 import sys
 sys.path.append("./rifkiFux")
@@ -25,7 +30,19 @@ class rifki(Gtk.Builder):
 
         self.devicelist = self.get_object("deviceCombo")
         self.devicelist.connect("changed", self.deviceSelected)
+        
+        #warnings
+        self.isoWarnWin = self.get_object("fileWarning")
+        self.deviceWarnWin = self.get_object("deviceWarning")
 
+        #errors
+        self.unknownErr = self.get_object("unknownError")
+        self.spaceErr = self.get_object("spaceError")
+        self.downloadErr = self.get_object("downloadError")
+
+        #informations
+        self.formatInfo = self.get_object("formatInfo")
+        
         self.chooser = self.get_object("selectedFile")
         filt = Gtk.FileFilter()
         filt.add_pattern("*.zip")
@@ -45,7 +62,7 @@ class rifki(Gtk.Builder):
         for i in dir(self.playButton):
             print(i)
         #help(self.playButton)
-        self.fired = lambda x: self.writeImage(wid="",file_=self.source, target=self.dev)
+        self.fired = lambda x: self.control()#self.writeImage(wid="",file_=self.source, target=self.dev)
         self.playButton.connect("clicked", self.fired)  
         self.cancelButton = self.get_object("cancel")
         self.cancelButton.connect("clicked", lambda x: self.__cancel__())
@@ -74,102 +91,79 @@ class rifki(Gtk.Builder):
     def fileSelected(self, widget):
         self.source =  self.chooser.get_filename()
         print(self.source)
+
     def control(self):
         if not os.path.exists(self.dev):
             #you must select a device
-            pass
+            self.deviceWarnWin.show_all()
+            
         if not os.path.exists(self.chooser.get_filename()):
             #you must select a disk image file
-            pass
+            self.isoWarnWin.show_all()
 
         #unmount device solved
         #format usb device solved
-        format("/org/freedesktop/UDisks2/block_devices/"+self.dev.lstrip("/dev/"))
+        #format("/org/freedesktop/UDisks2/block_devices/"+self.dev.lstrip("/dev/"))
         #write disk image
+        self.writeImage("",file_=self.source, target=self.dev)
 
-    def format(self):
-        pass
     
     def updateBar(self, data):
         self.bar.set_fraction(data)
 
     def writeImage(self, wid, file_=None, target=None):
         #alan uygunmu diye olc
-        while True:
-            if not self.processStart:
-                self.playButton.disconnect_by_func(self.fired)
-                #self.playButton.set_label("Duraklat")
-                #self.playButton.connect("clicked", self.pause)
-                self.bar.set_fraction(0.0)
-                self.input = open(file_, "rb")
-                self.output = open(target, "wb")
-                self.processStart = True
-                self.play = True
-                self.total_size = os.path.getsize(file_)
-                self.increment = self.total_size / 100
-                self.size = 0
-                self.written = 0
-   
-            self.buffer = self.input.read(1096)
-            
-            if len(self.buffer) == 0:
-            #"""process finished"""
-                print("finished")
-                self.output.flush()
-                self.input.close()
-                self.output.close()            
-                self.play = False
-                self.processStart= False
-                """
-                try:
-                    self.playButton.disconnect_by_func(self.continue_)
-                except:
-                    self.playButton.disconnect_by_func(self.pause) #FIXME i do not know 
-                """
-                return
-                
-            self.output.write(self.buffer)
-            self.size += len(self.buffer)
-            print(float(self.size/self.total_size))
-            self.written += len(self.buffer)
-            self.updateBar(float(self.size/self.total_size))
-            if self.written >= self.increment:
-                self.output.flush()
-                self.written = 0
-            """
-            if not self.play:
-                break#self.writeImage(wid="")
-            """
-            
+        #alan uygun degilse self.spaceErr.show_all(); return
+        self.playButton.disconnect_by_func(self.fired)
+        self.id = self.playButton.connect("clicked", self.pause)
+        self.playButton.set_label("Durdur")
+        self.cancelButton.set_sensitive(True)
+        a = Queue()
+        for i in [False, file_, target, "", "", "", "", ""]:
+            a.put(i)
+        self.t = writeProcess(a, self.bar)
+        #self.t.daemon = True
+        self.t.start()        
+        
 
-        #except RecursionError:
-            #self.writeImage(wid = "")
-            #print("recursion")
-
-    def close(self, *args):
+    def close(self, w):
+        try:
+            self.t.kill()
+        except:
+            pass
         exit()
-    """
-    def pause(self, *args):
-        self.playButton.disconnect_by_func(self.pause)
-        self.play = False
-        self.playButton.set_label("Devam Et")
-        self.playButton.connect("clicked", self.continue_)
+       
 
-    def continue_(self, *args):
-        self.playButton.disconnect_by_func(self.continue_)
-        self.play = True
-        self.playButton.set_label("Duraklat")
-        self.playButton.connect("clicked", self.pause)
-        self.writeImage(wid="")
-    """   
-    def __exit__(self):
-        pass
+    def continue_(self, widget):
+        try:
+            self.t.continue_()
+            self.playButton.set_label("Durdur")
+            self.playButton.disconnect_by_func(self.continue_)
+            self.id = self.playButton.connect("clicked", self.pause)
+        except:
+            self.t.cancel()
+            self.unknownErr.show_all()
+
+    def pause(self, widget):
+        try:
+            self.t.pause()
+            self.playButton.set_label("Devam Et")
+            self.playButton.disconnect_by_func(self.pause)
+            self.id = self.playButton.connect("clicked", self.continue_)
+        except:
+            self.unknownErr.show_all()
+
     def __cancel__(self):
-        with self.processStart as f:
-            f = False
-            self.play = False
-        #self.processStart = False
-            self.input.close()
-            self.output.close()
+        try:
+            self.t.cancel()
+            self.bar.set_fraction(0.0)            
+            self.playButton.disconnect(self.id)  #FIXME another wall without assert
+            self.playButton.connect("clicked",self.fired)
+            self.playButton.set_label("Başla")
+            self.cancelButton.set_sensitive(False)
+        
+        except AssertionError:
+            exit() #log tutulmali
+
 app = rifki()
 Gtk.main()

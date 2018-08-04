@@ -1,112 +1,110 @@
-"""
-import asyncio, functools
-# event trigger function
-def trigger(event):
-    print('EVENT SET')
-    input("bekleme kaldirilsin?")
-    event.set() # wake up coroutines waiting
+from threading import Event, Thread
+from queue import Queue 
+import os
 
-# event consumers
-async def writeImage(event):
-    consumer_name = 'Consumer A'
-    #do write and go to control
-    await event.wait()
-    print('{} triggered'.format(consumer_name))
+class writeProcess(Thread):
 
-async def controlPlay(event):
-    consumer_name = 'Consumer B'
-    print('{} waiting'.format(consumer_name))
-    while 1:
-        await event.wait()
-        print('{} triggered'.format(consumer_name))
-        trigger(event)
-# event
-event = asyncio.Event()
+    def __init__(self, qu, wid):
+        Thread.__init__(self)
+        self.control = Event()
+        self.data = qu
+        self.bar = wid
+
+    #def cancel(self):
+        #self.control.set()
+
+    def getValues(self, qu):
+        while(not qu.empty()):
+            item = qu.get()
+            print(item)
+            print(item)
+            yield item
 
 
-main_future = asyncio.wait([consumer_a(event),
-consumer_b(event)])
-# event loop
-event_loop = asyncio.get_event_loop()
-event_loop.call_later(0.1, functools.partial(trigger, event))
-# trigger event in 0.1 sec
-# complete main_future
-done, pending = event_loop.run_until_complete(main_future)
-"""
-
-from threading import *
-
-class b(Event):
-
-    def __init__(self):
-        super().__init__()
-        #self.my_func()
-    def my_func(self):
-        #print("************************************")
-        #print("bir şey gir")
-        self.wait()
-        print("devam ediyor")
-        print("----------------------------")
-            
-    def trigger(self):        
-        self.set()
-        #self.clear()
+    def continue_(self):
+        print("continue da")
+        self.play = True
+        self.control.wait(0.05)
+        self.control.set()
+        self.control = Event()
+        #self.run()
         
-        
-
-
-class par:
-    def __init__(self):
-        self.aj = b()
-        self.part = Thread(target=self.g)
-        self.part.daemon = True
-        self.part.start()
-
-    def g(self):
-        self.aj.my_func()
-
-    def eventStop(self):
-        self.aj.trigger()
-        self.aj = b()
-        self.aj.my_func()
+    def pause(self):
+        print("pause da")
+        self.blockkill = True
+        self.play = False
+        self.control.wait(0.01)  # self.control.wait() must not run here,because program isn't answer,instead i used self.control.wait(0.01)
+    
+    def kill(self):
+        self.t.cancel()
+        self.control.wait(0.01)
          
         
+        
+    def cancel(self):
+        """process kill"""
+        self.kill = True
+        self.control.wait(0.01)  # self.control.wait() must not run here,because program isn't answer,instead i used self.control.wait(0.01)
+
+    def setQue(self, *args):
+        result_qu =Queue()
+        for i in args: 
+            result_qu.put(i)
+        return result_qu
+
+    def run(self):
+        self.isProcessStart, self.input_, self.output, self.size, self.written, self.total_size, self.increment, self.buffer_ = self.getValues(self.data)
+        self.play = True
+        self.kill = False
+        self.blockkill = False
+        while True:
+            if self.play:
+                if not self.play:
+                    self.wait()
+                if self.kill:
+                    break
+
+                
+                if not self.isProcessStart:
+                    self.total_size = os.path.getsize(self.input_)
+                    self.input_ = open(self.input_, "rb")
+                    self.output = open(self.output, "wb")
+
+                    self.isProcessStart = True
+                    self.size = 0
+                    self.written = 0
+                    self.increment = self.total_size / 100
+            
+                self.buffer_ = self.input_.read(1096)
+
+                self.size += len(self.buffer_) 
+                self.written += len(self.buffer_)
+
+                if len(self.buffer_) == 0:
+                    print("finished")
+                    self.isProcessStart = False
+
+                    self.output.flush()
+                    self.input_.close()
+                    self.output.close()
+                    self.control.set()
+                    break
+
+                self.output.write(self.buffer_)
+                if self.written >= self.increment:
+                    self.output.flush()
+                    self.written = 0
+                print(float(self.size/self.total_size))
+                self.bar.set_fraction(float(self.size/self.total_size))
+                
+            #self.data = self.setQue(self.isProcessStart, self.input_, self.output, self.size, self.written, self.total_size, self.increment, self.buffer_)
+        if self.blockkill:
+            exit()        
+
     
-
-w = par()  
-
-while 1:
-    cev = input("e/h")
-    if cev == "e":
-        w.eventStop()
-    else:
-        break
     
+            
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+        
+            
