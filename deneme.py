@@ -14,19 +14,21 @@ from functools import partial
 import sys
 sys.path.append("./rifkiFux")
 import os
+from signal import *
 
 
 class rifki(Gtk.Builder):
     def __init__(self):        
         super().__init__()
-        self.source = None
-        self.dev = None
+        self.source = ""
+        self.dev = ""
         self.processStart = False
         self.play = False
 
         self.add_from_file("ilkGlade.ui")
         self.window = self.get_object("window1")
         self.window.connect("destroy", self.close)
+        self.content = self.get_object("resultText")
 
         self.devicelist = self.get_object("deviceCombo")
         self.devicelist.connect("changed", self.deviceSelected)
@@ -59,15 +61,17 @@ class rifki(Gtk.Builder):
         
         self.playButton = self.get_object("state")
         self.playButton.set_label("Başla")
-        for i in dir(self.playButton):
-            print(i)
-        #help(self.playButton)
+        #for i in dir(self.content):
+            #print(i)
+        #help(self.content)
         self.fired = lambda x: self.control()#self.writeImage(wid="",file_=self.source, target=self.dev)
         self.playButton.connect("clicked", self.fired)  
         self.cancelButton = self.get_object("cancel")
         self.cancelButton.connect("clicked", lambda x: self.__cancel__())
+        self.cancelButton.set_sensitive(False)    
 
         self.bar = self.get_object("processBar")
+        self.bar.set_show_text(True)
 
         self.get_devices()
         self.udisksCliListener = self.udisksCli.connect("changed", lambda x: self.get_devices())
@@ -96,10 +100,12 @@ class rifki(Gtk.Builder):
         if not os.path.exists(self.dev):
             #you must select a device
             self.deviceWarnWin.show_all()
+            return
             
-        if not os.path.exists(self.chooser.get_filename()):
+        if not os.path.exists(self.source):
             #you must select a disk image file
             self.isoWarnWin.show_all()
+            return
 
         #unmount device solved
         #format usb device solved
@@ -114,24 +120,22 @@ class rifki(Gtk.Builder):
     def writeImage(self, wid, file_=None, target=None):
         #alan uygunmu diye olc
         #alan uygun degilse self.spaceErr.show_all(); return
+        self.content.get_buffer().set_text("Writing %s to %s \n"%(file_, target))
         self.playButton.disconnect_by_func(self.fired)
         self.id = self.playButton.connect("clicked", self.pause)
         self.playButton.set_label("Durdur")
         self.cancelButton.set_sensitive(True)
+
+       
         a = Queue()
-        for i in [False, file_, target, "", "", "", "", ""]:
+        for i in [False, file_, target, "", "", "", "", "", self.finished]:
             a.put(i)
-        self.t = writeProcess(a, self.bar)
-        #self.t.daemon = True
+        self.t = writeProcess(a, self.bar, self.content)
         self.t.start()        
         
 
     def close(self, w):
-        try:
-            self.t.kill()
-        except:
-            pass
-        exit()
+        os.kill(os.getpid(), SIGTERM) #FIXME How can i finished this process better ?I think, his is bad wall.But when i used exit() func, program is not answering. 
        
 
     def continue_(self, widget):
@@ -157,7 +161,18 @@ class rifki(Gtk.Builder):
         try:
             self.t.cancel()
             self.bar.set_fraction(0.0)            
-            self.playButton.disconnect(self.id)  #FIXME another wall without assert
+            self.playButton.disconnect(self.id) 
+            self.playButton.connect("clicked",self.fired)
+            self.playButton.set_label("Başla")
+            self.cancelButton.set_sensitive(False)
+        
+        except AssertionError:
+            exit() #log tutulmali
+
+    def finished(self):
+        try:
+            self.bar.set_fraction(0.0)            
+            self.playButton.disconnect(self.id) 
             self.playButton.connect("clicked",self.fired)
             self.playButton.set_label("Başla")
             self.cancelButton.set_sensitive(False)
