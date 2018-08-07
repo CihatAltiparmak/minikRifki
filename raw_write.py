@@ -3,6 +3,8 @@ from queue import Queue
 import os
 from signal import *
 from notifications import *
+from subprocess import Popen
+from gi.repository import  GObject, Gdk #, Glib
 
 class writeProcess(Thread):
 
@@ -18,15 +20,19 @@ class writeProcess(Thread):
         
 
     def pause(self):
+        """wait process"""
         self.play = False
 
     def continue_(self):
+        """continue to process"""
         self.play = True
 
     def cancel(self):
+        """cancel the process"""
         self.cancel_ = True
 
     def kill(self):
+        """process kill,terminate program"""
         self.kill = True
 
     def getValues(self, qu):
@@ -42,11 +48,12 @@ class writeProcess(Thread):
         self.isProcessStart, self.input_, self.output, self.size, self.written, self.total_size, self.increment, self.buffer_, self.signal = self.getValues(self.data)
         
         while not self.cancel_:
+            Gdk.threads_enter()
             if self.play:
-                
                 if self.kill:
                     self.output.close()
                     self.input.close()
+                    Gdk.threads_leave()
                     os.kill(os.getpid(), SIGKILL)#exit()  
                     #FIXME Which one is better,os.kill or exit func        
                 
@@ -72,7 +79,8 @@ class writeProcess(Thread):
                     self.play = False
                     self.output.flush()
                     self.input_.close()
-                    self.output.close()                   
+                    self.output.close()  
+                    Gdk.threads_leave()                 
                     break
 
                 self.output.write(self.buffer_)
@@ -82,9 +90,15 @@ class writeProcess(Thread):
                 print(float(self.size/self.total_size))
                 self.bar.set_fraction(float(self.size/self.total_size))
                 #self.bar.set_text("%s "%(str(float(self.size/self.total_size)*100) + "%"))
+            Gdk.threads_leave()
             
                 
-        print("thread bitti", self.is_alive())
+        if self.cancel_:
+            self.input_.close()
+            self.output.close()
+            self.bar.set_fraction(0.0)
+            Gdk.threads_leave()
+            return
         if self.size == self.total_size:
             """process is successfull"""
             print("successful")
@@ -101,6 +115,7 @@ class writeProcess(Thread):
             #show_notification("successfull", "Image writing is failed.") #FIXME in normal mod,notification popup show,but when runned this script with sudo,it is raising error
         self.input_.close()
         self.output.close()
+        Gdk.threads_leave()
         self.signal()
     
             

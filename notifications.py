@@ -9,3 +9,4 @@ def show_notification(title, content):
 
 if "__main__" == __name__:
     show_notification("elma", "muz")
+    
