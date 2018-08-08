@@ -38,8 +38,6 @@ class writeProcess(Thread):
     def getValues(self, qu):
         while(not qu.empty()):
             item = qu.get()
-            print(item)
-            print(item)
             yield item
 
 
@@ -73,7 +71,6 @@ class writeProcess(Thread):
                 self.written += len(self.buffer_)
 
                 if len(self.buffer_) == 0:
-                    print("finished")
                     self.isProcessStart = False
                     self.cancel = True
                     self.play = False
@@ -87,31 +84,27 @@ class writeProcess(Thread):
                 if self.written >= self.increment:
                     self.output.flush()
                     self.written = 0
-                print(float(self.size/self.total_size))
                 self.bar.set_fraction(float(self.size/self.total_size))
-                #self.bar.set_text("%s "%(str(float(self.size/self.total_size)*100) + "%"))
             Gdk.threads_leave()
             
                 
         if self.cancel_:
+            Gdk.threads_enter()
             self.input_.close()
             self.output.close()
-            self.bar.set_fraction(0.0)
-            Gdk.threads_leave()
+            
             return
         if self.size == self.total_size:
             """process is successfull"""
-            print("successful")
             text_buffer = self.content.get_buffer()
             end_iter = text_buffer.get_end_iter()
-            text_buffer.insert(end_iter,"Image is written successfully.")
+            text_buffer.insert(end_iter,"Kalıp başarıyla yazıldı.")
             #show_notification("successfull", "Image is written successfully.") #show_notification("successfull", "Image writing is failed.") #FIXME in normal mod,notification popup show,but when runned this script with sudo,it is raising error
         else:
-            """unknown error"""
-            print("unknown error")          
+            """unknown error"""          
             text_buffer = self.content.get_buffer()
             end_iter = text_buffer.get_end_iter()
-            text_buffer.insert(end_iter,"Image writing is failed.")
+            text_buffer.insert(end_iter,"Kalıp yazma başarısız!")
             #show_notification("successfull", "Image writing is failed.") #FIXME in normal mod,notification popup show,but when runned this script with sudo,it is raising error
         self.input_.close()
         self.output.close()

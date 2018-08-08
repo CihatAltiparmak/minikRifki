@@ -1,0 +1,7 @@
+rifki.py (145 )[#FIXME How can i finished this process better ?I think, it is bad wall.But when i used exit() func, program is not answering.]
+
+raw_write.py (56) [#FIXME Which one is better,os.kill or exit func}]
+
+raw_write.py (102,108) [#FIXME in normal mod,notification popup show,but when runned this script with sudo,it is raising error]
+
+usbDetect.py (16) [#FIXME How do is select USB devices better without third party?]

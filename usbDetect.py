@@ -13,12 +13,12 @@ def getAllUnixDevices():
         for j in i:
             if isinstance(j, dbus.Dictionary):
                 try:
-                    #FIXME How Do I Select USB Devices?
+                    #FIXME How do is select USB devices better without third party?
                     
                     path = deviceList("/org/freedesktop/UDisks2/block_devices/"+j["unix-device"].lstrip("/dev/"))
                     result = findUSBDevices(path)
                     if result[0]:
-                        devices.append([str(result[1].Get("org.freedesktop.UDisks2.Drive", "Vendor"))+" "+str(result[1].Get("org.freedesktop.UDisks2.Drive", "Model"))+" "+str(result[1].Get("org.freedesktop.UDisks2.Drive", "Size")), str(j["unix-device"])])
+                        devices.append([str(result[1].Get("org.freedesktop.UDisks2.Drive", "Vendor"))+" "+str(result[1].Get("org.freedesktop.UDisks2.Drive", "Model"))+" "+str(round(result[1].Get("org.freedesktop.UDisks2.Drive", "Size") / 10**9,1)) + " GB", str(j["unix-device"]), result[1].Get("org.freedesktop.UDisks2.Drive", "Size")])
                         
                 except KeyError:
                     pass
