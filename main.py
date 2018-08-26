@@ -5,43 +5,39 @@ import gi
 gi.require_version("Gtk", '3.0')
 gi.require_version("UDisks", "2.0")
 from gi.repository import Gtk, UDisks, Gdk, GLib ,GObject
-#import gobject
 from threading import Thread, Lock, Event
 from usbDetect import getAllUnixDevices
 import os
-import sys
+import sys, signal
 
 class process(Thread):
-    def __init__(self, forProcess, forCancel):
+    def __init__(self, forProcess, forCancel, forKill, forFinish):
         self.running = True
         self.cancel = True
+        self.kill = True
+        self.finish = True
+        self.isSuccess = None
         
         self.forProcess = forProcess
         self.forCancel = forCancel
+        self.forKill = forKill
+        self.forFinish = forFinish
         super().__init__()
-
-    #def killThread(self):
-        """
-        with self.lock:
-            self.running = False
-        """
-        #self.runningEvent.set()
-        
-    #def cancelThread(self):
-        """
-        with self.lock:
-            self.cancel = False
-        """
-        #self.cancelEvent.set()
 
     def run(self):
         print("yeniden başliom...")
         
-        while self.running and self.cancel:
+        while self.running and self.cancel and self.kill and self.finish:
             self.forProcess.emit("process")
         
         if not self.cancel: #Event.isSet():
-            self.forCancel.emit("cancel")
+            GLib.idle_add(self.forCancel.emit,"cancel")
+
+        if not self.kill:
+            GLib.idle_add(self.forKill.emit, "kill")
+
+        if not self.finish:
+            GLib.idle_add(self.forFinish.emit, "finished", self.isSuccess)
 
         print("öldüm")        
             
@@ -73,6 +69,13 @@ class processSignal(GObject.GObject):
 
 GObject.type_register(processSignal)
 GObject.signal_new("process", processSignal, GObject.SIGNAL_RUN_FIRST,GObject.TYPE_NONE, ())
+
+class killSignal(GObject.GObject):
+    def __init__(self):
+        GObject.GObject.__init__(self)
+
+GObject.type_register(killSignal)
+GObject.signal_new("kill", killSignal, GObject.SIGNAL_RUN_FIRST,GObject.TYPE_NONE, ())
 
 
 
@@ -106,6 +109,8 @@ class fux(Gtk.Builder):
         self.processId = self.myProcessSignal.connect("process", self.processManager)
         self.myCancelSignal = cancelSignal()
         self.cancelId = self.myCancelSignal.connect("cancel", self.on_cancel)
+        self.killSignal = killSignal()
+        self.killId = self.killSignal.connect("kill", self.on_close)
 
         #warnings
         self.isoWarnWin = self.get_object("fileWarning")
@@ -121,7 +126,8 @@ class fux(Gtk.Builder):
         
         self.chooser = self.get_object("selectedFile")
         filt = Gtk.FileFilter()
-        filt.add_pattern("*.iso")
+        filt.add_pattern("*.[iI][mM][gG]")
+        filt.add_pattern("*.[iI][sS][oO]")
         self.chooser.set_filter(filt)
         self.chooser.connect("file-set", self.selectFile)
         self.udisksCli = UDisks.Client.new_sync()
@@ -194,20 +200,31 @@ class fux(Gtk.Builder):
         self.written = written
         Gdk.threads_leave()
 
-    def processCenter(self):
-        pass #while self.running.
+    
+
     def processManager(self, object):
+        if self.isStop:
+            return
         buffer_ = self.sourceFileHandler.read(1096)
         if len(buffer_) == 0:
-            """process finished"""                
+            """process finished""" 
+            self.isStop = True               
             self.targetFileHandler.close()
             self.sourceFileHandler.close()
             if self.size == self.total_size:
                 """processs is finished successfully"""
-                self.finish_call.emit("finished",1)
+                self.lock.acquire()
+                self.processThread.isSuccess = 1
+                self.processThread.finish = False
+                self.lock.release()              
+                return
             else:
                 """processs is failed"""
-                self.finish_call.emit("finished",0)
+                self.lock.acquire()
+                self.processThread.isSuccess = 1
+                self.processThread.finish = False
+                self.lock.release()
+                return
                    
         self.size += len(buffer_)
         self.written += self.size
@@ -220,15 +237,9 @@ class fux(Gtk.Builder):
             except ValueError:
                 pass
         self.updateBarSignal.emit("update",float(self.size/self.total_size), self.size, self.written)
-            
-        """
-        if not self._cancel:
-            self.sourceFileHandler.close()
-            self.targetFileHandler.close()
-            self.updateBarSignal.emit("update",0.0, 0.0, 0.0)
-        """
+        
     def startProcess(self):
-        #self.playButton.handler_unblock(self.playId)
+        self.isStop = False
         self.size = 0
         self.written = 0
         self.chooser.set_sensitive(False)
@@ -243,7 +254,7 @@ class fux(Gtk.Builder):
         self.targetFileHandler = open(self.dev[0], "wb")
         self.total_size = os.path.getsize(self.selectedFile)
         self.content.get_buffer().set_text("%s , %s 'e yazılıyor..\n"%(self.selectedFile, self.dev[0]))
-        self.processThread = process(self.myProcessSignal, self.myCancelSignal)
+        self.processThread = process(self.myProcessSignal, self.myCancelSignal, self.killSignal, self.finishProcessSignal)
         #self.processThread.daemon = True
         self.processThread.start()
 
@@ -257,47 +268,40 @@ class fux(Gtk.Builder):
         self.playId = self.playButton.connect("clicked", self.continue_)
 
     def continue_(self, widget):
-        #self.playButton.handler_unblock(self.playId)
-        #self.myProcessSignal.handler_unblock(self.processId)
         self.playButton.disconnect(self.playId)
         self.playButton.set_label("Durdur")
         self.playId = self.playButton.connect("clicked", self.pause)
-        self.processThread = process(self.myProcessSignal, self.myCancelSignal)
+        self.processThread = process(self.myProcessSignal, self.myCancelSignal, self.killSignal, self.finishProcessSignal)
         #self.processThread.daemon = True
         self.processThread.start()
 
 
     def cancel(self, widget):
         self.lock.acquire()
-        self.processThread.cancel = False
+        if not self.processThread.running:
+            self.on_cancel(None)
+        else:
+            self.processThread.cancel = False
         self.lock.release()
-        #Gdk.threads_enter()
-        #self.updateBarSignal.handler_block(self.updateBarSignalId)
-        #self.processThread.join(0.01)
-        #self.myProcessSignal.handler_block(self.processId)
-        #self.processThread.cancelThread()
-        #self.processThread.running = False
-        #self.sourceFileHandler.close()
-        #self.targetFileHandler.close()
+        self.lock = Lock()
         
-        #Gdk.threads_leave()
         
     def on_cancel(self, object):
+        self.sourceFileHandler.close()
+        self.targetFileHandler.close()
         self.size = 0
         self.total_size = 0
         self.written = 0
         self.playButton.disconnect(self.playId)
         self.playId = self.playButton.connect("clicked",self.control)
         self.playButton.set_label("Başla")
-        #self.playButton.connect("clicked", self.control)
         self.devicelist.set_sensitive(True)
         self.chooser.set_sensitive(True)
-        #self.udisksCli.handler_unblock(self.udisksCliListener)
         self.cancelButton.set_sensitive(False)        
         self.bar.set_fraction(0.0)
-        self.lock = Lock()
 
     def on_finished(self, object, success_result):
+        
         if success_result == 1:
             """mission successful"""
             text_buffer = self.content.get_buffer()
@@ -318,15 +322,29 @@ class fux(Gtk.Builder):
         self.devicelist.set_sensitive(True)
         self.chooser.set_sensitive(True)
         self.udisksCli.handler_unblock(self.udisksCliListener)
+        self.bar.set_fraction(0.0)
         self.lock = Lock()
 
     def close(self, wid):
+        self.lock = Lock()
         try:
-            self.processThread.cancel = True
-            self.processThread.running = False
+            self.lock.acquire()
+            self.processThread.kill = False
+            self.lock.release()
         except:
-            pass
-        sys.exit(self.window.destroy())#Gdk.threads_leave())
+            sys.exit(self.window.destroy())
+
+    def on_close(self, object):
+        self.sourceFileHandler.close()
+        self.targetFileHandler.close()
+        self.window.destroy()
+        try:
+            signal.pthread_kill(self.processThread.ident, signal.SIGTERM)
+        except:
+            sys.exit()
+        Gdk.threads_leave()
+        
+        
          
 
 GObject.threads_init()
