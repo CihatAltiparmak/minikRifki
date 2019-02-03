@@ -1,6 +1,16 @@
 # minikRıfkı
 
-An Easy ISO Loader
-Allah nasip ederse bunu Pardus a pull requests atacagım.
+An ImageWriter for Milis Linux
 
-edit: olmayacak gibi...allah kerim
+usage:
+
+```
+usage: milisImageWriter [-h] [-i ISO_PATH]
+
+milisImageWriter (milisImageWriter) <jarbay910@gmail.com>
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -i ISO_PATH, --iso_path ISO_PATH
+                        Select the iso
+```
