@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 #
 # author => Cihat Altiparmak jarbay910@gmail.com
 #
