@@ -308,7 +308,8 @@ class milisImageWriter(Gtk.Builder):
                                         self.targetDeviceHandler, 
                                         self.sourceFileHandler,
                                         self.updateBarSignal,
-                                        self.finishProcessSignal)
+                                        self.finishProcessSignal,
+                                        self.window)
         self.write_thread.start()
         print("started: ", activeCount())
 
