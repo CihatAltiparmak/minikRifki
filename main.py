@@ -168,7 +168,7 @@ class milisImageWriter(Gtk.Builder):
         self.devicelist.add_attribute(renderer_text, "text", 1)
         
         self.playButton = self.get_object("state")
-        self.playButton.set_label("Start")        
+        #self.playButton.set_label("Start")        
         self.playId = self.playButton.connect("clicked", self.control)
   
         self.cancelButton = self.get_object("cancel")
