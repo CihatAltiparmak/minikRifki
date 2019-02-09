@@ -1,5 +1,3 @@
-#!/usr/bin/python3
-
 #
 # author => Cihat Altiparmak jarbay910@gmail.com
 #
@@ -7,8 +5,9 @@
 import gi
 gi.require_version("Gtk", '3.0')
 gi.require_version("UDisks", "2.0")
+gi.require_version('XApp', '1.0')
 
-from gi.repository import Gtk, UDisks, Gdk, GLib ,GObject
+from gi.repository import Gtk, UDisks, Gdk, GLib ,GObject, XApp
 
 from threading import Thread, Lock, Event, activeCount
 
@@ -16,13 +15,23 @@ import time
 import os
 import sys
 import argparse
+import locale
+import gettext
+import signal
 
+
+APP = 'mintstick'
+LOCALE_DIR = "/usr/share/linuxmint/locale"
+locale.bindtextdomain(APP, LOCALE_DIR)
+gettext.bindtextdomain(APP, LOCALE_DIR)
+gettext.textdomain(APP)
+_ = gettext.gettext
 
 class Dialogs(Gtk.Dialog):
     def __init__(self, content, parent):
         Gtk.Dialog.__init__(self, "milisDialog", parent, 0,
                          (Gtk.STOCK_OK, Gtk.ResponseType.OK))
-        self.set_default_size(400, 500)
+        self.set_default_size(200, 100)
         label = Gtk.Label(content)
         box = self.get_content_area()
         box.add(label)
@@ -34,6 +43,13 @@ class barSignal(GObject.GObject):
 
 GObject.type_register(barSignal)
 GObject.signal_new("update", barSignal, GObject.SIGNAL_RUN_FIRST,GObject.TYPE_NONE, (float, float, float, ))
+
+class cancelSignal(GObject.GObject):
+    def __init__(self):
+        GObject.GObject.__init__(self)
+
+GObject.type_register(cancelSignal)
+GObject.signal_new("cancel", cancelSignal, GObject.SIGNAL_RUN_FIRST,GObject.TYPE_NONE, (bool,))
 
 class finishSignal(GObject.GObject):
     def __init__(self):
@@ -48,15 +64,25 @@ class writeThread(Thread):
                        size,
                        targetDeviceHandler,
                        sourceFileHandler,
-                       updatePosterSignal, finishProcessSignal, window):
+                       updatePosterSignal, 
+                       finishProcessSignal,
+                       cancelProcessSignal, 
+                       window, 
+                       button):
+
         self.written = written
         self.total_size = total_size
         self.size = size
+
         self.targetDeviceHandler = targetDeviceHandler
         self.sourceFileHandler = sourceFileHandler
+
         self.updatePosterSignal = updatePosterSignal
         self.finishProcessSignal = finishProcessSignal
+        self.cancelProcessSignal = cancelProcessSignal        
+            
         self.window = window
+        self.button = button
         self.permission = True
         self.running = True
         self.killing = False
@@ -70,20 +96,26 @@ class writeThread(Thread):
 
     def run(self):
         print('[32m'+"[ WriteThread ] -> is started"+'[0m')
-        try:
-            while not self.cancel_event.isSet():
-                if not self.state_event.isSet():
+        while not self.cancel_event.isSet():
+            if not self.state_event.isSet():
+                try:
                     self.write()
-            self.updatePosterSignal.emit("update",0.0, 0.0, 0.0)
-        except:
-            unknownErr = Dialogs("Unknown Error", self.window)
-            response = unknownErr.run()
-            if response == Gtk.ResponseType.OK:
-                unknownErr.destroy()
-        finally:
-            self.sourceFileHandler.close()
-            self.targetDeviceHandler.close()
-                
+                except:
+                    print("bir hata var")
+                    """
+                    unknownError = Dialogs("Bilinmeyen Bir Hata Meydana Geldi!", self.window)
+                    response = unknownError.run()
+                    if response == Gtk.ResponseType.OK: 
+                        unknownError.hide()
+                    """
+                    self.cancelProcessSignal.emit("cancel", True)
+                    self.cancel_event.set()
+                # finally:
+                    # self.cancelProcessSignal.emit("cancel", 1)
+                    # self.cancel_event.set()
+                    
+        self.updatePosterSignal.emit("update",0.0, 0.0, 0.0)
+        self.button.set_sensitive(True)
         print('[32m'+"[ WriteThread ] -> is closed"+'[0m')
 
     def write(self):
@@ -112,6 +144,7 @@ class writeThread(Thread):
 
     def cancel(self):
         self.pause()
+        self.button.set_sensitive(False)
         self.cancel_event.set()
 
     def pause(self):
@@ -120,6 +153,11 @@ class writeThread(Thread):
     def continue_(self):
         self.state_event.clear()
            
+    def file_closing(self):
+        if (self.targetDeviceHandler is not None) and  (not self.targetDeviceHandler.closed):
+            self.targetDeviceHandler.close()
+        if (self.sourceFileHandler is not None) and (not self.sourceFileHandler.closed):        
+            self.sourceFileHandler.close()
 
 class milisImageWriter(Gtk.Builder):
     def __init__(self, iso_path=None):
@@ -136,7 +174,7 @@ class milisImageWriter(Gtk.Builder):
         self.add_from_file("milis_image_writer.ui")
         self.window = self.get_object("window1")
         self.window.connect("destroy", self.close)
-        self.window.set_title("MİLİS-USB KALIP YAZICI")
+        self.window.set_title(_("MİLİS-USB KALIP YAZICI"))
 
         self.content = self.get_object("resultText")
 
@@ -146,9 +184,11 @@ class milisImageWriter(Gtk.Builder):
         
         # signals
         self.updateBarSignal = barSignal()
-        self.updateBarSignalId = self.updateBarSignal.connect("update", self.updateBar)
+        self.updateBarSignalId = self.updateBarSignal.connect("update", self.updateBar) # to update progress bar
         self.finishProcessSignal = finishSignal()
-        self.finishProcessId = self.finishProcessSignal.connect("finished", self.on_finished)
+        self.finishProcessId = self.finishProcessSignal.connect("finished", self.on_finished) # on finish img writing process
+        self.cancelProcessSignal = cancelSignal()
+        self.cancelProcessId = self.cancelProcessSignal.connect("cancel", self.on_cancel) # for unknown problems while writing device
         
         self.chooser = self.get_object("selectedFile")
         filt = Gtk.FileFilter()
@@ -168,7 +208,7 @@ class milisImageWriter(Gtk.Builder):
         self.devicelist.add_attribute(renderer_text, "text", 1)
         
         self.playButton = self.get_object("state")
-        self.playButton.set_label("yazdır")        
+        self.playButton.set_label(("başla"))        
         self.playId = self.playButton.connect("clicked", self.control)
   
         self.cancelButton = self.get_object("cancel")
@@ -252,6 +292,9 @@ class milisImageWriter(Gtk.Builder):
         Gdk.threads_enter()
         # print("---UPDATEBAR----", value, size, written)
         self.bar.set_fraction(value)
+        int_progress = int(float(value)*100)
+        XApp.set_window_progress_pulse(self.window, False)
+        XApp.set_window_progress(self.window, int_progress)
         self.size = size
         self.written = written
         Gdk.threads_leave()
@@ -259,27 +302,17 @@ class milisImageWriter(Gtk.Builder):
     def control(self, widget):
         if self.dev is None or not os.path.exists(self.dev[0]):
             # you must select a device
-            deviceWarnWin = Dialogs("bir aygıt seçmelisiniz", self.window)
-            response = deviceWarnWin.run()
-            if response == Gtk.ResponseType.OK:
-                deviceWarnWin.destroy()
+            self.show_dialog(_("Bir aygıt seçmelisiniz."))
             return
             
         if not os.path.exists(self.selectedFile):
             # you must select a disk image file
-            isoWarnWin = Dialogs("bir disk kalıbı dosyası seçmelisiniz", self.window)
-            response = isoWarnWin.run()
-            if response == Gtk.ResponseType.OK:
-                isoWarnWin.hide()
-           
+            self.show_dialog(_("Bir dosya seçmelisiniz."))
             return
 
         if float(self.dev[1]) < os.path.getsize(self.selectedFile):
             # you must get enough space
-            spaceWarWin = Dialogs("you must get enough space", self.window)
-            response = spaceWarWin.run()
-            if response == Gtk.ResponseType.OK: 
-                self.spaceWarWin.hide()
+            self.show_dialog(_("Yeteri kadar alan yok."))
             return
 
         self.file_closing()
@@ -295,9 +328,9 @@ class milisImageWriter(Gtk.Builder):
         
         self.playButton.disconnect(self.playId)
         self.playId = self.playButton.connect("clicked", self.pause)
-        self.playButton.set_label("duraklat")
+        self.playButton.set_label(_("durdur"))
 
-        self.content.get_buffer().set_text("%s , %s 'e yaziliyor..\n"%(self.selectedFile, self.dev[0]))
+        self.content.get_buffer().set_text(_("%s , %s 'e yazılıyor..\n"%(self.selectedFile, self.dev[0])))
 
         self.sourceFileHandler = open(self.selectedFile, "rb")
         self.targetDeviceHandler = open(self.selectedTarget, "wb")
@@ -309,7 +342,9 @@ class milisImageWriter(Gtk.Builder):
                                         self.sourceFileHandler,
                                         self.updateBarSignal,
                                         self.finishProcessSignal,
-                                        self.window)
+                                        self.cancelProcessSignal,
+                                        self.window,
+                                        self.playButton)
         self.write_thread.start()
         print("started: ", activeCount())
 
@@ -317,36 +352,47 @@ class milisImageWriter(Gtk.Builder):
         self.write_thread.pause()
         print("waiting", self.write_thread.isAlive(), "activeThread: ", activeCount())
         self.playButton.disconnect(self.playId)
-        self.playButton.set_label("devam et")
+        self.playButton.set_label(_("devam et"))
         self.playId = self.playButton.connect("clicked", self.continue_)
 
     def continue_(self, obj):
         print("not waiting", self.write_thread.isAlive(), "activeThread", activeCount())
         self.playButton.disconnect(self.playId)
-        self.playButton.set_label("durdur")
+        self.playButton.set_label(_("durdur"))
         self.playId = self.playButton.connect("clicked", self.pause)
         self.write_thread.continue_()
 
     def cancel(self, obj):
+        # self.playButton.set_sensitive(False)
+        self.playButton.disconnect(self.playId)
         self.write_thread.cancel()
         time.sleep(0.1)
-        print("[ Is thread death ] = ", self.write_thread.isAlive())
+        print("[ Is thread live ] = ", self.write_thread.isAlive())
+        self.on_cancel(1, False)
+
+    def on_cancel(self, obj, isUnknownError):
+        if isUnknownError:
+            self.playButton.disconnect(self.playId)
         self.size = 0
         self.total_size = 0
         self.written = 0
         self.selectedFile = ""
         self.selectedTarget = ""
-        self.playButton.disconnect(self.playId)
         self.playId = self.playButton.connect("clicked",self.control)
-        self.playButton.set_label("yazdır")
+        self.playButton.set_label(_("başla"))
         self.devicemodel.clear()
+        self.udisksCli.handler_unblock(self.udisksCliListener)
         self.get_devices()
         self.devicelist.set_sensitive(True)
         self.chooser.unselect_all()
         self.chooser.set_sensitive(True)
-        self.cancelButton.set_sensitive(False)        
-        self.bar.set_fraction(0.0)
-        self.file_closing()
+        self.cancelButton.set_sensitive(False)
+        GLib.idle_add(self.file_closing)
+        text_buffer = self.content.get_buffer()
+        end_iter = text_buffer.get_end_iter()
+        text_buffer.insert(end_iter,_("İptal Edildi"))
+        if isUnknownError:
+            text_buffer.insert(end_iter,_("\nBilinmeyen Bir Hata Meydana Geldi!"))
 
     def on_finished(self, obj, success_result):
         self.sourceFileHandler.close()
@@ -355,39 +401,49 @@ class milisImageWriter(Gtk.Builder):
             """mission successful"""
             text_buffer = self.content.get_buffer()
             end_iter = text_buffer.get_end_iter()
-            text_buffer.insert(end_iter,"Kalip basariyla yazildi.")
+            text_buffer.insert(end_iter,_("Kalıp basarıyla yazıldı."))
         else:
             """mission failed"""
             text_buffer = self.content.get_buffer()
             end_iter = text_buffer.get_end_iter()
-            text_buffer.insert(end_iter,"Kalip yazma basarisiz")
+            text_buffer.insert(end_iter,_("Kalıp yazma basarısız"))
         self.playButton.disconnect(self.playId)
         self.size = 0
         self.written = 0
         self.total_size = 0
         self.cancelButton.set_sensitive(False)
-        self.playButton.set_label("yazdır")
+        self.playButton.set_label(_("başla"))
         self.playId = self.playButton.connect("clicked", self.control)
         self.devicelist.set_sensitive(True)
         self.chooser.set_sensitive(True)
         self.udisksCli.handler_unblock(self.udisksCliListener)
-        self.bar.set_fraction(0.0)
+        # self.bar.set_fraction(0.0)
 
     def close(self, object):
         try:
             if self.write_thread is not None:
                 self.write_thread.cancel()
-            self.file_closing()
+                signal.pthread_kill(self.write_thread.id, signal.SIGTERM)
+            # self.file_closing()
         except:
             pass
         finally:
             Gtk.main_quit()
 
     def file_closing(self):
-        if (self.targetDeviceHandler is not None) and  (not self.targetDeviceHandler.closed):
-            self.targetDeviceHandler.close()
+        try:
+            if (self.targetDeviceHandler is not None) and  (not self.targetDeviceHandler.closed):
+                self.targetDeviceHandler.close()
+        except OSError:
+            pass
         if (self.sourceFileHandler is not None) and (not self.sourceFileHandler.closed):        
             self.sourceFileHandler.close()
+
+    def show_dialog(self, word):
+        dialog = Dialogs(word, self.window)
+        response = dialog.run()
+        if response == Gtk.ResponseType.OK: 
+            dialog.hide()
 
 def main(): 
     parser = argparse.ArgumentParser(description='milisImageWriter (milisImageWriter) <jarbay910@gmail.com>')
