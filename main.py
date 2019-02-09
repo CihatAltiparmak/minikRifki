@@ -317,13 +317,13 @@ class milisImageWriter(Gtk.Builder):
         self.write_thread.pause()
         print("waiting", self.write_thread.isAlive(), "activeThread: ", activeCount())
         self.playButton.disconnect(self.playId)
-        self.playButton.set_label("devam Et")
+        self.playButton.set_label("devam et")
         self.playId = self.playButton.connect("clicked", self.continue_)
 
     def continue_(self, obj):
         print("not waiting", self.write_thread.isAlive(), "activeThread", activeCount())
         self.playButton.disconnect(self.playId)
-        self.playButton.set_label("Durdur")
+        self.playButton.set_label("durdur")
         self.playId = self.playButton.connect("clicked", self.pause)
         self.write_thread.continue_()
 
