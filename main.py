@@ -295,7 +295,7 @@ class milisImageWriter(Gtk.Builder):
         
         self.playButton.disconnect(self.playId)
         self.playId = self.playButton.connect("clicked", self.pause)
-        self.playButton.set_label("Duraklat")
+        self.playButton.set_label("duraklat")
 
         self.content.get_buffer().set_text("%s , %s 'e yaziliyor..\n"%(self.selectedFile, self.dev[0]))
 
@@ -317,7 +317,7 @@ class milisImageWriter(Gtk.Builder):
         self.write_thread.pause()
         print("waiting", self.write_thread.isAlive(), "activeThread: ", activeCount())
         self.playButton.disconnect(self.playId)
-        self.playButton.set_label("Devam Et")
+        self.playButton.set_label("devam Et")
         self.playId = self.playButton.connect("clicked", self.continue_)
 
     def continue_(self, obj):
