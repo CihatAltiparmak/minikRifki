@@ -168,7 +168,7 @@ class milisImageWriter(Gtk.Builder):
         self.devicelist.add_attribute(renderer_text, "text", 1)
         
         self.playButton = self.get_object("state")
-        #self.playButton.set_label("Start")        
+        self.playButton.set_label("yazdır")        
         self.playId = self.playButton.connect("clicked", self.control)
   
         self.cancelButton = self.get_object("cancel")
@@ -259,7 +259,7 @@ class milisImageWriter(Gtk.Builder):
     def control(self, widget):
         if self.dev is None or not os.path.exists(self.dev[0]):
             # you must select a device
-            deviceWarnWin = Dialogs("you must select a device", self.window)
+            deviceWarnWin = Dialogs("bir aygıt seçmelisiniz", self.window)
             response = deviceWarnWin.run()
             if response == Gtk.ResponseType.OK:
                 deviceWarnWin.destroy()
@@ -267,7 +267,7 @@ class milisImageWriter(Gtk.Builder):
             
         if not os.path.exists(self.selectedFile):
             # you must select a disk image file
-            isoWarnWin = Dialogs("you must select a disk image file", self.window)
+            isoWarnWin = Dialogs("bir disk kalıbı dosyası seçmelisiniz", self.window)
             response = isoWarnWin.run()
             if response == Gtk.ResponseType.OK:
                 isoWarnWin.hide()
@@ -295,7 +295,7 @@ class milisImageWriter(Gtk.Builder):
         
         self.playButton.disconnect(self.playId)
         self.playId = self.playButton.connect("clicked", self.pause)
-        self.playButton.set_label("Durdur")
+        self.playButton.set_label("Duraklat")
 
         self.content.get_buffer().set_text("%s , %s 'e yaziliyor..\n"%(self.selectedFile, self.dev[0]))
 
@@ -338,7 +338,7 @@ class milisImageWriter(Gtk.Builder):
         self.selectedTarget = ""
         self.playButton.disconnect(self.playId)
         self.playId = self.playButton.connect("clicked",self.control)
-        self.playButton.set_label("Start")
+        self.playButton.set_label("yazdır")
         self.devicemodel.clear()
         self.get_devices()
         self.devicelist.set_sensitive(True)
@@ -366,7 +366,7 @@ class milisImageWriter(Gtk.Builder):
         self.written = 0
         self.total_size = 0
         self.cancelButton.set_sensitive(False)
-        self.playButton.set_label("Start")
+        self.playButton.set_label("yazdır")
         self.playId = self.playButton.connect("clicked", self.control)
         self.devicelist.set_sensitive(True)
         self.chooser.set_sensitive(True)
